@@ -9,6 +9,7 @@
   const E2E_ITER = 600000;
   const WRAP_AAD = "vault-keywrap-v1";
   const ROOT = new URL("../", location.href);
+  const FORCE_INLINE = location.hash === "#inline";   // test / escape hatch: skip the service worker
   const $ = (id)=>document.getElementById(id);
   const b64d = (s)=>{ const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
   const b64e = (u8)=>{ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); };
@@ -47,16 +48,57 @@
     }
     return reg;
   }
-  // Reload into the app only once the service worker is actually serving the decrypted page.
+  // Decrypt one vault file in the page (same format the service worker uses).
+  const TYPES = { html:"text/html; charset=utf-8", json:"application/json; charset=utf-8", md:"text/markdown; charset=utf-8" };
+  async function decryptRel(rel, key, rawFetch){
+    const r = await rawFetch(ROOT.pathname + rel + ".enc", { cache:"no-cache" });
+    if(!r.ok) throw new Error("enc " + r.status);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    if(buf[0]!==86||buf[1]!==76||buf[2]!==84||buf[3]!==50) throw new Error("format");
+    const wl = (buf[4]<<8) | buf[5];
+    const raw = await crypto.subtle.decrypt({ name:"RSA-OAEP" }, key, buf.slice(6, 6+wl));
+    const fk = await crypto.subtle.importKey("raw", raw, { name:"AES-GCM" }, false, ["decrypt"]);
+    return crypto.subtle.decrypt({ name:"AES-GCM", iv:buf.slice(6+wl, 18+wl), additionalData:new TextEncoder().encode(rel) }, fk, buf.slice(18+wl));
+  }
+  // Fallback when the browser's service worker doesn't serve the app (seen on iPhone Safari):
+  // decrypt in the page, route the app's own data fetches through the same decryption, render.
+  async function inlineBoot(key){
+    let rel = location.pathname.slice(ROOT.pathname.length); if(!rel || rel.endsWith("/")) rel += "index.html";
+    const rawFetch = window.fetch.bind(window);
+    const html = new TextDecoder().decode(await decryptRel(rel, key, rawFetch));
+    window.fetch = async (input, init)=>{
+      try{
+        const u = new URL(typeof input === "string" ? input : input.url, location.href);
+        if(u.origin === location.origin && u.pathname.startsWith(ROOT.pathname) && /\.(html|json|md)$/.test(u.pathname) && !/(manifest|keywrap)\.json$/.test(u.pathname)){
+          const r = u.pathname.slice(ROOT.pathname.length);
+          const pt = await decryptRel(r, key, rawFetch);
+          return new Response(pt, { status:200, headers:{ "Content-Type": TYPES[(r.match(/\.([a-z]+)$/)||[])[1]] || "text/plain" } });
+        }
+      }catch(e){}
+      return rawFetch(input, init);
+    };
+    let fired = false; window.addEventListener("load", ()=>{ fired = true; }, { once:true });
+    document.open(); document.write(html); document.close();
+    setTimeout(()=>{ if(!fired){ try{ window.dispatchEvent(new Event("load")); }catch(e){} } }, 800);
+  }
+  // Prefer the service worker (works offline); if it isn't serving within a few seconds, boot inline.
   async function go(){
-    for(let i=0;i<15;i++){
+    let why = FORCE_INLINE ? "forced" : "";
+    for(let i=0;i<(FORCE_INLINE?0:8);i++){
       try{
         const r = await fetch(location.href, { cache:"no-store" });
         if(r.headers.get("X-Vault")==="1"){ location.reload(); return; }
-      }catch(e){}
-      await new Promise(s=>setTimeout(s, 700));
+        why = navigator.serviceWorker && navigator.serviceWorker.controller ? "sw-no-decrypt" : "sw-not-active";
+      }catch(e){ why = "net"; }
+      await new Promise(s=>setTimeout(s, 600));
     }
-    showForm("לא ניתן היה לפתוח כרגע. בדוק חיבור ונסה שוב, או הזן סיסמה מחדש.");
+    try{
+      const key = await getBundleKey();
+      if(!key) throw new Error("no-key");
+      await inlineBoot(key);
+    }catch(e){
+      showForm("לא ניתן היה לפתוח כרגע (" + why + " / " + (e && e.message || e) + "). צלם את ההודעה ושלח.");
+    }
   }
   function showForm(note){
     $("v-form").style.display = "block"; $("v-wait").style.display = "none";
@@ -73,7 +115,7 @@
       try{ kb = await unwrap(raw); }catch(e){ $("v-go").disabled=false; msg("סיסמה שגויה.", true); return; }
       localStorage.setItem(E2E_LS, raw);
       await putBundleKey(kb);
-      await swReady();
+      if(!FORCE_INLINE){ try{ await swReady(); }catch(e){} }
       go();
     }catch(e){ $("v-go").disabled=false; msg("שגיאה: "+(e && e.message || e), true); }
   }
@@ -90,9 +132,9 @@
   }
   async function start(){
     $("v-f").addEventListener("submit", submit);
-    await retireLegacy();
+    if(!FORCE_INLINE) await retireLegacy();
     try{
-      await swReady();
+      if(!FORCE_INLINE){ try{ await swReady(); }catch(e){} }
       if(await getBundleKey()){ go(); return; }
       const raw = localStorage.getItem(E2E_LS);
       if(raw){
