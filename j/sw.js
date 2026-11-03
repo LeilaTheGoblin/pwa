@@ -1,2 +1,2 @@
-const CACHE = "j-vmw0un15m";
+const CACHE = "j-vmw0vztwh";
 importScripts("../vault-sw.js");
