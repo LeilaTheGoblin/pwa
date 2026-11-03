@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#7A1F2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="יומן">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>יומן</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#FBF8F8;color:#2B0B14;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;box-sizing:border-box}
+  .box{background:#fff;border:1px solid #EEE1E4;border-radius:16px;padding:22px;max-width:360px;width:100%;box-shadow:0 6px 24px rgba(80,10,25,.08);text-align:center}
+  h1{font-size:18px;margin:0 0 6px;color:#5C1421}
+  p{font-size:13px;color:#6B5A60;margin:0 0 14px;line-height:1.5}
+  input{width:100%;box-sizing:border-box;padding:12px;font-size:16px;border:1px solid #E6D6DA;border-radius:10px;margin-bottom:10px;direction:ltr;text-align:right}
+  button{width:100%;background:#7A1F2E;color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;cursor:pointer}
+  #v-msg{font-size:12.5px;min-height:18px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div id="v-wait"><h1>🔒</h1><p>טוען…</p></div>
+  <div id="v-form" style="display:none">
+    <h1>🔒 פתיחה</h1>
+    <p>הזן את הסיסמה פעם אחת במכשיר הזה.</p>
+    <form id="v-f"><input type="password" id="v-pass" autocomplete="current-password" placeholder="סיסמה"><button id="v-go" type="submit">פתח</button></form>
+    <div id="v-msg"></div>
+  </div>
+</div>
+<script src="../vault-client.js"></script>
+</body>
+</html>
