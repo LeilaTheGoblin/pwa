@@ -24,7 +24,6 @@
   }
   const getBundleKey = ()=> idb("readonly", st=>st.get("bundle")).catch(()=>null);
   const putBundleKey = (k)=> idb("readwrite", st=>st.put(k, "bundle"));
-  const delBundleKey = ()=> idb("readwrite", st=>st.delete("bundle")).catch(()=>{});
 
   async function derive(pass){
     const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass.normalize("NFC")), "PBKDF2", false, ["deriveBits"]);
@@ -48,11 +47,16 @@
     }
     return reg;
   }
-  function go(){
-    const n = +(sessionStorage.getItem("vault-reloads")||0);
-    if(n >= 2){ sessionStorage.removeItem("vault-reloads"); delBundleKey(); showForm("לא ניתן היה לפתוח את האפליקציה. הזן סיסמה שוב."); return; }
-    sessionStorage.setItem("vault-reloads", String(n+1));
-    location.reload();
+  // Reload into the app only once the service worker is actually serving the decrypted page.
+  async function go(){
+    for(let i=0;i<15;i++){
+      try{
+        const r = await fetch(location.href, { cache:"no-store" });
+        if(r.headers.get("X-Vault")==="1"){ location.reload(); return; }
+      }catch(e){}
+      await new Promise(s=>setTimeout(s, 700));
+    }
+    showForm("לא ניתן היה לפתוח כרגע. בדוק חיבור ונסה שוב, או הזן סיסמה מחדש.");
   }
   function showForm(note){
     $("v-form").style.display = "block"; $("v-wait").style.display = "none";
@@ -82,7 +86,6 @@
       if(raw){
         try{ await putBundleKey(await unwrap(raw)); go(); return; }catch(e){ /* stale key → ask */ }
       }
-      sessionStorage.removeItem("vault-reloads");
       showForm();
     }catch(e){ showForm("שגיאה: "+(e && e.message || e)); }
   }

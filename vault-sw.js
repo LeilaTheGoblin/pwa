@@ -27,7 +27,7 @@ const TYPES = { html:"text/html; charset=utf-8", json:"application/json; charset
 async function fetchCipher(encUrl){
   const cache = await caches.open(CACHE);
   try{
-    const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 6000);
+    const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 15000);
     const r = await fetch(encUrl, { cache:"no-cache", signal:ctl.signal }); clearTimeout(t);
     if(r.ok){ cache.put(encUrl, r.clone()); return r; }
     if(r.status === 404) return null;
