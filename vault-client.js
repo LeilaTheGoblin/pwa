@@ -77,8 +77,20 @@
       go();
     }catch(e){ $("v-go").disabled=false; msg("שגיאה: "+(e && e.message || e), true); }
   }
+  // Retire the old, unencrypted app copies this origin may still hold (old service workers + their caches).
+  async function retireLegacy(){
+    try{
+      for(const g of await navigator.serviceWorker.getRegistrations()){
+        if(!new URL(g.scope).pathname.startsWith(ROOT.pathname)) await g.unregister();
+      }
+      for(const k of await caches.keys()){
+        if(!/^[a-z]-v[0-9a-z]+$/.test(k)) await caches.delete(k);
+      }
+    }catch(e){}
+  }
   async function start(){
     $("v-f").addEventListener("submit", submit);
+    await retireLegacy();
     try{
       await swReady();
       if(await getBundleKey()){ go(); return; }
